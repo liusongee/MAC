@@ -1,5 +1,5 @@
 import numpy as np
-import pFDMAC_Sim
+import pFDMAC
 
 packet_length_list = [64,128,256,512,1024,1500]
 
@@ -101,7 +101,7 @@ def Janus_sim_exchange_period(upstream, downstrem, curr_time, matSIR):
             LF_v = []
             deltaT = []
             for i in downUnvisited:
-                tmp_rate = pFDMAC_Sim.lookupRate(matSIR[i][station_ID])
+                tmp_rate = pFDMAC.lookupRate(matSIR[i][station_ID])
                 if tmp_rate > 0:
                     LF_v.append(calcLF(downstrem[i],tmp_rate,Vt))
                     deltaT.append(curr_up_time - curr_down_time - calcLF(downstrem[i],tmp_rate,Vt))
@@ -115,9 +115,9 @@ def Janus_sim_exchange_period(upstream, downstrem, curr_time, matSIR):
             else:
                 ind = downUnvisited[LF_v.index(min(LF_v))]
 
-                curr_down_time += (p_CFPoll_header + downstrem[ind] + p_FCS)/pFDMAC_Sim.lookupRate(matSIR[ind][station_ID])
+                curr_down_time += (p_CFPoll_header + downstrem[ind] + p_FCS)/pFDMAC.lookupRate(matSIR[ind][station_ID])
                 down_visited.append(ind)
-                down_visited_rate.append(pFDMAC_Sim.lookupRate(matSIR[ind][station_ID]))
+                down_visited_rate.append(pFDMAC.lookupRate(matSIR[ind][station_ID]))
         else:
             T_full = curr_down_time - curr_up_time
             LF_v = []
@@ -127,7 +127,7 @@ def Janus_sim_exchange_period(upstream, downstrem, curr_time, matSIR):
             for i in upUnvisited:
                 # calculate delta time of completion
                 last_station = down_visited[-1]
-                op_rate = pFDMAC_Sim.lookupRate(matSIR[last_station][i])
+                op_rate = pFDMAC.lookupRate(matSIR[last_station][i])
 
                 if op_rate == 0:
                     continue
@@ -161,7 +161,7 @@ def Janus_sim_exchange_period(upstream, downstrem, curr_time, matSIR):
                     downUnvisited = getUnvisited(down_visited,len(downstrem))
                     flag = False
                     for j in downUnvisited:
-                        if pFDMAC_Sim.lookupRate(matSIR[j][i]) > pFDMAC_Sim.lookupRate(matSIR[down_visited[-1]][i]):
+                        if pFDMAC.lookupRate(matSIR[j][i]) > pFDMAC.lookupRate(matSIR[down_visited[-1]][i]):
                             flag = True
                             break
                     if flag:
