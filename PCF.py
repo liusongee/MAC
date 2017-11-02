@@ -9,7 +9,8 @@ packet_length_list = [64,128,256,512,1024, 1500]
 #######################################################################################################################
 
 #the packet length setting
-p_CFPoll_header = 16
+p_PHYhdr = 16
+p_CFPoll_header = 16 + p_PHYhdr
 p_FCS = 4
 ACK = 14
 p_Data = 2048
@@ -40,3 +41,4 @@ def PCF_sim(upstream, downstrem, current_time = 0, need_ACK=False, Vt = 18):
             need_ACK = False
     return  [current_time, need_ACK]
 ########################################################################################################################
+

@@ -14,6 +14,12 @@ def inSector(Vdirection, angle, center, pos):
     else:
         return True
 
+def JFI_calculate(TestVector):
+    a = TestVector.sum()
+    b = len(TestVector)*(TestVector**2).sum()
+
+    return a**2/b
+
 def test_itself():
     Vdirection = np.array([1,0])
     angle = np.pi/2
@@ -23,5 +29,9 @@ def test_itself():
 
     print(inSector(Vdirection, angle, center, pos1))
     print(inSector(Vdirection, angle, center, pos2))
+
+    jfi = JFI_calculate(np.array([1,1,0,1,1,1,1,1]))
+
+    print(jfi)
 
 test_itself()

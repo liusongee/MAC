@@ -1,4 +1,5 @@
 import random
+import numpy as np
 ########################################################################################################################
 # Generate traffic vector: upstream & downstream
 # flag: according with the traffic distribution on the Internet
@@ -77,3 +78,11 @@ def packetLengthDistribution(small=0.4, medium=0.2, large=0.4):
     else:
         print("error!!!!!!!!!!!!!!!!!!!!!")
         return 0
+
+def test_itself():
+    upstream, downstream = generateUDtraffic(10, 0.5, 1, flag=True, Plength=1024)
+    print(upstream, downstream)
+    flag1 = np.array(upstream) <=0
+    print(flag1.astype(np.int32))
+
+test_itself()

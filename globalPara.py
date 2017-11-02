@@ -4,8 +4,9 @@
 ## global parameter setting
 #######################################################################################################################
 
-#the packet length setting
-p_CFPoll_header = 16
+#the packet length setting(bytes)
+p_PHYhdr = 16
+p_CFPoll_header = 16 + p_PHYhdr
 p_FCS = 4
 ACK = 14
 p_Data = 2048
