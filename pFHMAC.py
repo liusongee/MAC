@@ -42,7 +42,7 @@ def contention_free_inital_stage_sim(mat_SIR):
 
     return [max(curr_down_time, curr_up_time), max(curr_down_time, curr_up_time)]
 #
-def greedyPolling(matSIR, upstream, downstream, curr_up_time, curr_down_time, last_station, ACK_up, ACK_down):
+def greedyPolling(matSIR, upstream, downstream, curr_up_time, curr_down_time, last_station, ACK_up, ACK_down, op_rate_last= 0, last_Dpayload = 0):
     ackflag_up = np.array(upstream) > 0
     ackflag_down = np.array(downstream) > 0
     ackflag_up = ackflag_up.astype(np.int32)
@@ -54,41 +54,21 @@ def greedyPolling(matSIR, upstream, downstream, curr_up_time, curr_down_time, la
     upstream = tmp1.tolist()
     downstream = tmp2.tolist()
 
-    count = 0
     uVisitedStations = []
     dVisitedStations = []
-    selectedList = []
 
     uUnvisitedStation = getUnvisitedStations(uVisitedStations, len(upstream))
     dUnvisitedStation = getUnvisitedStations(dVisitedStations, len(downstream))
 
     while(uUnvisitedStation or dUnvisitedStation):
-        # if no station upload packet
-        if not uUnvisitedStation:
-            for downS in dUnvisitedStation:
-                curr_down_time = curr_down_time + T_SIFS + (p_CFPoll_header + downstream[downS] + p_FCS)*8/V_max
-                dVisitedStations.append(downS)
-            last_station[0] = downS
-            break
-        # if no station download packet
-        if not dUnvisitedStation:
-            for upS in uUnvisitedStation:
-                curr_up_time = curr_up_time + T_SIFS + (p_CFPoll_header + upstream[upS] + p_FCS)*8/V_max
-                uVisitedStations.append(upS)
-            last_station[1] = upS
-            break
+        delta_time = []
+        concurrent_time = []
+        alone_time = []
         if curr_up_time == curr_down_time:
             # random select a downstream packet
             dStation = random.choice(dUnvisitedStation)
             # look for a station can concurrently send packets
-            delta_time = []
-            concurrent_time = []
-            alone_time = []
             for upS in uUnvisitedStation:
-                # if upS == dStation:
-                #     print("uploading Station cannot be the same as the downloading one.")
-                #     continue
-
                 op_rate = lookupRate(matSIR[upS][dStation])
                 if op_rate <= 0:
                     delta_time.append(0)
@@ -96,7 +76,7 @@ def greedyPolling(matSIR, upstream, downstream, curr_up_time, curr_down_time, la
                     alone_time.append([0,0])
                 else:
                     curr_down_time_concurrent = curr_down_time + T_SIFS + (p_CFPoll_header + downstream[dStation] + p_FCS)*8/op_rate
-                    curr_up_time_concurrent = curr_up_time + T_SIFS + (2*p_CFPoll_header + upstream[upS] + p_FCS)*8/V_max
+                    curr_up_time_concurrent = curr_down_time + T_SIFS + (2*p_CFPoll_header + upstream[upS] + p_FCS)*8/V_max
 
                     curr_down_time_alone = curr_down_time + T_SIFS + (p_CFPoll_header + downstream[dStation] + p_FCS)*8/V_max
                     curr_up_time_alone = curr_down_time_alone + T_SIFS + (p_CFPoll_header + upstream[upS] + p_FCS)*8/V_max
@@ -105,13 +85,12 @@ def greedyPolling(matSIR, upstream, downstream, curr_up_time, curr_down_time, la
                     concurrent_time.append([curr_down_time_concurrent,curr_up_time_concurrent])
                     alone_time.append([curr_down_time_alone,curr_up_time_alone])
 
-            # if not delta_time:
-            #     # downloading alone
-            #     curr_down_time = curr_down_time + T_SIFS + (p_CFPoll_header + downstream[dStation] + p_FCS) * 8 / V_max
-
             if min(delta_time) >= 0:
                 # random select a upstream packet
-                uStation = random.choice(uUnvisitedStation)
+                if dStation in uUnvisitedStation:
+                    uStation = dStation
+                else:
+                    uStation = random.choice(uUnvisitedStation)
                 # send packet in serial
                 curr_down_time = curr_down_time + T_SIFS + (p_CFPoll_header + downstream[dStation] + p_FCS)*8/V_max
                 curr_up_time = curr_down_time + T_SIFS + (p_CFPoll_header + upstream[uStation] + p_FCS)*8/V_max
@@ -119,28 +98,24 @@ def greedyPolling(matSIR, upstream, downstream, curr_up_time, curr_down_time, la
                 last_station = [dStation, uStation]
                 dVisitedStations.append(dStation)
                 uVisitedStations.append(uStation)
+                # adjust curr_down_time
+                curr_down_time = curr_up_time - T_SIFS - (upstream[uStation] + p_FCS) * 8 / V_max
             else:
                 min_uStation_i = delta_time.index(min(delta_time))
+                if dStation in uUnvisitedStation and delta_time[min_uStation_i] == delta_time[uUnvisitedStation.index(dStation)]:
+                    min_uStation_i = uUnvisitedStation.index(dStation)
                 curr_down_time = concurrent_time[min_uStation_i][0]
                 curr_up_time = concurrent_time[min_uStation_i][1]
-
-                # avoid polling one more different stations
-                if curr_up_time < curr_down_time:
-                    curr_up_time = curr_down_time
-
                 last_station = [dStation, uUnvisitedStation[min_uStation_i]]
                 dVisitedStations.append(dStation)
                 uVisitedStations.append(uUnvisitedStation[min_uStation_i])
+                # avoid polling one more station
+                if curr_up_time < curr_down_time:
+                    curr_up_time = curr_down_time
         elif curr_up_time > curr_down_time:
+            op_rate_list = []
             # schedule downstream packet
-            delta_time = []
-            concurrent_time = []
-            alone_time = []
-
             for downS in dUnvisitedStation:
-                # calculate the time of send packets alone
-                curr_down_time_alone = curr_up_time + T_SIFS + (p_CFPoll_header +downstream[downS] + p_FCS)*8 / V_max
-                curr_up_time_alone = curr_up_time
                 # calculate the concurrent time
                 op_rate = lookupRate(matSIR[last_station[1]][downS])
 
@@ -148,82 +123,102 @@ def greedyPolling(matSIR, upstream, downstream, curr_up_time, curr_down_time, la
                     delta_time.append(0)
                     concurrent_time.append([0,0])
                     alone_time.append([0,0])
+                    op_rate_list.append(0)
                 else:
                     curr_down_time_concurrent = curr_down_time + T_SIFS + (p_CFPoll_header +downstream[downS] + p_FCS)*8 / op_rate
                     curr_up_time_concurrent = curr_up_time
 
+                    # calculate the time of send packets alone
+                    curr_down_time_alone = curr_up_time + T_SIFS + (p_CFPoll_header + downstream[
+                        downS] + p_FCS) * 8 / V_max
+                    curr_up_time_alone = curr_up_time
                     delta_time.append(curr_down_time_concurrent - curr_down_time_alone)
                     concurrent_time.append([curr_down_time_concurrent, curr_up_time_concurrent])
                     alone_time.append([curr_down_time_alone, curr_up_time_alone])
+                    op_rate_list.append(op_rate)
 
             if min(delta_time) >= 0:
-                dStation = random.choice(dUnvisitedStation)
-
-                curr_down_time = curr_down_time + T_SIFS + (p_CFPoll_header +downstream[dStation] + p_FCS)*8 / V_max
-                last_station[0] = dStation
-                dVisitedStations.append(dStation)
+                curr_down_time = curr_up_time
+                op_rate_last = 0
+                last_Dpayload = 0
+                continue
             else:
                 min_dStation_i = delta_time.index(min(delta_time))
 
                 curr_down_time = concurrent_time[min_dStation_i][0]
                 last_station[0] = dUnvisitedStation[min_dStation_i]
                 dVisitedStations.append(last_station[0])
+                op_rate_last = op_rate_list[min_dStation_i]
+                last_Dpayload = downstream[last_station[0]]
 
-        elif curr_up_time < curr_down_time:
-            # schedule upstream packet
-            delta_time = []
-            concurrent_time = []
-            alone_time = []
-            for upS in uUnvisitedStation:
-                # calculate send them alone
-                curr_up_time_alone = curr_down_time + T_SIFS + (p_CFPoll_header + upstream[upS] + p_FCS) * 8 / V_max
-                curr_down_time_alone = curr_down_time
-                # calculate send them parallelly
-                op_rate = lookupRate(matSIR[upS][last_station[0]])
-                op_rate_last = lookupRate(matSIR[last_station[1]][last_station[0]])
-
-                if op_rate_last == 0:
-                    last_down_time = curr_down_time - (p_CFPoll_header + downstream[last_station[0]] + p_FCS) * 8 / V_max
+            if curr_down_time <= curr_up_time:
+                # upload a packet
+                if last_station[0] in uUnvisitedStation:
+                    uStation = last_station[0]
                 else:
-                    last_down_time = curr_down_time - (p_CFPoll_header + downstream[last_station[0]] + p_FCS) * 8 / op_rate_last
-
-                if op_rate <= 0:
-                    delta_time.append(0)
-                    concurrent_time.append([0,0])
-                    alone_time.append([0,0])
-                    continue
-                elif op_rate_last <= op_rate:
-                    if op_rate_last == 0:
-                        curr_up_time_concurrent = max(last_down_time + p_CFPoll_header*8/V_max, curr_up_time + T_SIFS) + (p_CFPoll_header + upstream[upS] + p_FCS) * 8 / V_max
-                    else:
-                        curr_up_time_concurrent = max(last_down_time + p_CFPoll_header*8/op_rate_last, curr_up_time + T_SIFS) + (p_CFPoll_header + upstream[upS] + p_FCS) * 8 / V_max
-                    curr_down_time_concurrent = curr_down_time
-                else:
-                    curr_up_time_concurrent = max(last_down_time + p_CFPoll_header*8/op_rate, curr_up_time + T_SIFS) + (p_CFPoll_header + upstream[upS] + p_FCS) * 8 / V_max
-                    curr_down_time_concurrent = curr_down_time + ((p_CFPoll_header + upstream[upS] + p_FCS) * 8)*(1/op_rate - 1/op_rate_last)
-
-                delta_time.append(max(curr_up_time_concurrent, curr_down_time_concurrent) - max(curr_up_time_alone, curr_down_time_alone))
-                concurrent_time.append([curr_down_time_concurrent, curr_up_time_concurrent])
-                alone_time.append([curr_down_time_alone, curr_up_time_alone])
-
-            if min(delta_time) >= 0:
-                uStation = random.choice(uUnvisitedStation)
-                curr_up_time = curr_down_time + T_SIFS + (p_CFPoll_header + upstream[uStation] + p_FCS) * 8 / V_max
-
+                    uStation = random.choice(uUnvisitedStation)
+                curr_down_time = curr_up_time + p_CFPoll_header * 8 / V_max
+                curr_up_time = curr_up_time + T_SIFS + (p_CFPoll_header + upstream[uStation] + p_FCS) * 8 / V_max
                 last_station[1] = uStation
                 uVisitedStations.append(uStation)
-            else:
-                min_uStation_i = delta_time.index(min(delta_time))
+            elif curr_down_time > curr_up_time:
+                # schedule upstream packet
+                delta_time = []
+                concurrent_time = []
+                alone_time = []
+                for upS in uUnvisitedStation:
+                    # calculate send them parallelly
+                    op_rate = lookupRate(matSIR[upS][last_station[0]])
+                    if op_rate <= 0:
+                        delta_time.append(0)
+                        concurrent_time.append([0,0])
+                        alone_time.append([0,0])
+                        continue
+                    elif op_rate_last <= op_rate:
+                        if op_rate_last == 0:
+                            print("operate transmission rate goes wrong!")
+                            break
+                        else:
+                            curr_up_time_concurrent = max(curr_down_time - (last_Dpayload + p_FCS)*8/op_rate_last - T_SIFS, curr_up_time) + T_SIFS + (p_CFPoll_header + upstream[upS] + p_FCS) * 8 / V_max
+                        curr_down_time_concurrent = curr_down_time
+                    else:
+                        curr_up_time_header = curr_down_time - (last_Dpayload + p_FCS)*8/op_rate_last - p_CFPoll_header*8*(1/op_rate_last - 1/op_rate)
+                        curr_up_time_concurrent = max(curr_up_time_header, curr_up_time + T_SIFS) + (p_CFPoll_header + upstream[upS] + p_FCS) * 8 / V_max
+                        curr_down_time_concurrent = curr_down_time + ((p_CFPoll_header + last_Dpayload + p_FCS) * 8)*(1/op_rate - 1/op_rate_last)
+                    # calculate send them alone
+                    curr_up_time_alone = curr_down_time + T_SIFS + (p_CFPoll_header + upstream[upS] + p_FCS) * 8 / V_max
+                    curr_down_time_alone = curr_down_time
 
-                curr_up_time = concurrent_time[min_uStation_i][1]
-                curr_down_time = concurrent_time[min_uStation_i][0]
-                last_station[1] = uUnvisitedStation[min_uStation_i]
-                uVisitedStations.append(last_station[1])
+                    delta_time.append(max(curr_up_time_concurrent, curr_down_time_concurrent) - max(curr_up_time_alone, curr_down_time_alone))
+                    concurrent_time.append([curr_down_time_concurrent, curr_up_time_concurrent])
+                    alone_time.append([curr_down_time_alone, curr_up_time_alone])
+
+                if min(delta_time) >= 0:
+                    if last_station[0] in uUnvisitedStation:
+                        uStation = last_station[0]
+                    else:
+                        uStation = random.choice(uUnvisitedStation)
+                    curr_up_time = curr_down_time + T_SIFS + (p_CFPoll_header + upstream[uStation] + p_FCS) * 8 / V_max
+                    curr_down_time += p_CFPoll_header*8/V_max
+
+                    last_station[1] = uStation
+                    uVisitedStations.append(uStation)
+                else:
+                    min_uStation_i = delta_time.index(min(delta_time))
+                    if last_station[0] in uUnvisitedStation and delta_time[min_uStation_i] == delta_time[uUnvisitedStation.index(last_station[0])]:
+                        min_uStation_i = uUnvisitedStation.index(last_station[0])
+                    curr_up_time = concurrent_time[min_uStation_i][1]
+                    curr_down_time = concurrent_time[min_uStation_i][0]
+                    last_station[1] = uUnvisitedStation[min_uStation_i]
+                    uVisitedStations.append(last_station[1])
+
+                if curr_up_time < curr_down_time:
+                    curr_up_time = curr_down_time
         else:
             # something is wrong.
             print("something is wrong!!")
 
         uUnvisitedStation = getUnvisitedStations(uVisitedStations, len(upstream))
         dUnvisitedStation = getUnvisitedStations(dVisitedStations, len(downstream))
-    # print(uVisitedStations, dVisitedStations)
-    return curr_up_time, curr_down_time, last_station, ackflag_up, ackflag_down
+
+    return curr_up_time, curr_down_time, last_station, ackflag_up, ackflag_down, op_rate_last, last_Dpayload

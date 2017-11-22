@@ -2,7 +2,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-
+import tools
 ## generate a toplogy with num_node stations in a scope with scope[0] * scope[1]
 # input:
 #       num_node: the number of Stations
@@ -18,7 +18,7 @@ def rnd_top_square(num_node = 10, scope = [300, 300]):
 
 def rnd_top_cycle(num_node = 10, ratio_radius = 150):
     stations_pos = []
-    for i in range(N):
+    for i in range(num_node):
         r = random.uniform(2, ratio_radius)
         angle = random.uniform(0, 2 * math.pi)
 
@@ -75,12 +75,46 @@ def interference(pos_nodes, signalPower):
         mat_interference.append(tmp.copy())
     return mat_interference
 
+def interference_with_directinalAntenna(pos_nodes, pos_AP, signalPower, angle):
+    mat_interference = []
+    num = len(pos_nodes)
+    for i in np.arange(0, num):
+        tmp = []
+        for j in np.arange(0, num):
+            # if node j in the coverage area of node i
+            if np.array_equal(np.array(pos_AP), np.array(pos_nodes[i])):
+                pos_nodes[i][0] -= 1
+                pos_nodes[i][1] -= 1
+            Vd = np.array(pos_AP) - np.array(pos_nodes[i])
+            Vdirection = Vd/math.sqrt((Vd[0]) ** 2 + (Vd[1]) ** 2)
+            if tools.inSector(Vdirection, angle, pos_nodes[i], pos_nodes[j]):
+                signal_loss = PathLoss(
+                    math.sqrt((pos_nodes[i][0] - pos_nodes[j][0]) ** 2 + (pos_nodes[i][1] - pos_nodes[j][1]) ** 2))
+                tmp.append(signalPower - signal_loss)
+            else:
+                tmp.append(-80)
+        mat_interference.append(tmp.copy())
+    return mat_interference
 
-# mat_SIR[i][j] means that node i's SIR with interference from node j.
-def calc_SIR(pos_nodes, pos_AP, signalPower = 100):
+# mat_SIR[i][j] means that node j's SIR with interference from node i.
+def calc_SIR(pos_nodes, pos_AP, deltaPower = 10, signalPower = 100):
     mat_SIR = []
     num = len(pos_nodes)
-    mat_interference = interference(pos_nodes, signalPower - 10)
+    mat_interference = interference(pos_nodes, signalPower - deltaPower)
+    v_signal_nodes = signalAP2node(pos_nodes, pos_AP, signalPower)
+
+    for i in np.arange(0, num):
+        tmp = []
+        for j in np.arange(0, num):
+            tmp.append(v_signal_nodes[j] - mat_interference[i][j])
+        mat_SIR.append(tmp.copy())
+
+    return mat_SIR
+
+def calc_SIR_directional(pos_nodes, pos_AP, deltaPower = 10, signalPower = 100, angle=np.pi/6):
+    mat_SIR = []
+    num = len(pos_nodes)
+    mat_interference = interference_with_directinalAntenna(pos_nodes, pos_AP, signalPower - deltaPower, angle)
     v_signal_nodes = signalAP2node(pos_nodes, pos_AP, signalPower)
 
     for i in np.arange(0, num):

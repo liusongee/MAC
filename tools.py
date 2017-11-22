@@ -1,12 +1,25 @@
 import numpy as np
 
 # Vdirection is a unit vector, means the direction of the multi-beam directional antena
-# center denotes the possition of transmitting node
+# center denotes the position of transmitting node
 # angle denotes the angle of multi-beam directional antenna
-# pos denotes the possition of receiving node
+# pos denotes the position of receiving node
 def inSector(Vdirection, angle, center, pos):
     Vpos = pos - center
-    Acos_pos = np.dot(Vdirection, Vpos)/(np.sqrt(Vdirection.dot(Vdirection))*np.sqrt(Vpos.dot(Vpos)))
+    Vpos_m = (np.sqrt(Vdirection.dot(Vdirection))*np.sqrt(Vpos.dot(Vpos)))
+    if not bool(Vpos_m):
+        return True
+    Acos_pos = np.dot(Vdirection, Vpos)/ Vpos_m
+
+    if not bool(round(Acos_pos,2) - 1.0):
+        return True
+    if not bool(round(Acos_pos,2) + 1.0):
+        if not bool(angle - 2*np.pi):
+            return True
+        else:
+            return False
+    if abs(Acos_pos) >1:
+        print(round(Acos_pos,10))
     Apos = np.arccos(Acos_pos)
     # print(round(Apos,4), round(angle/2,4))
     if round(Apos,4) > round(angle/2,4):
@@ -34,4 +47,4 @@ def test_itself():
 
     print(jfi)
 
-test_itself()
+# test_itself()
