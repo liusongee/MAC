@@ -45,10 +45,10 @@ def plot_rnd_top(stations_pos, AP_pos, scope):
 # get the signal-to-interference ratio for the network
 ################################################################################
 # pass loss function
-def PathLoss(d):
+def PathLoss(d,n=4):
     if d == 0:
         return 0
-    return 48 + 10 * 4 * math.log10(d)
+    return 48 + 10 * n * math.log10(d)
 
 
 def signalAP2node(pos_nodes, pos_AP, signalPower):
